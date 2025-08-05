@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL HTML Fetcher</title>
+    <!-- Use Tailwind CSS for a modern, responsive design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the app */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 2rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+        }
+
+        #content-display img,
+        #content-display video,
+        #content-display audio,
+        #content-display iframe {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* Loading spinner animation */
+        .spinner {
+            border-top-color: #3b82f6;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto p-6 bg-white rounded-xl shadow-lg mt-10">
+
+        <!-- Title and Description -->
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-2">URL Content Fetcher</h1>
+        <p class="text-center text-gray-600 mb-6">Enter a JSON API URL to fetch HTML content and display it below.</p>
+
+        <!-- URL Input and Button -->
+        <div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4 mb-6">
+            <input type="text" id="url-input" class="flex-grow w-full md:w-auto p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" placeholder="e.g., https://api.example.com/data">
+            <button id="load-button" class="w-full md:w-auto px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition duration-200">
+                Load Content
+            </button>
+        </div>
+
+        <!-- Status Message and Loading Indicator -->
+        <div id="status-message" class="text-center text-red-600 font-medium mb-4"></div>
+        <div id="loading-indicator" class="hidden flex justify-center items-center py-4">
+            <div class="spinner w-8 h-8 rounded-full border-4 border-gray-200"></div>
+            <span class="ml-3 text-gray-600">Loading...</span>
+        </div>
+
+        <!-- Download Button (Hidden initially) -->
+        <div id="download-container" class="hidden text-center mb-6">
+            <button id="download-button" class="px-6 py-3 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition duration-200">
+                Download as HTML
+            </button>
+        </div>
+
+        <!-- Content Display Area -->
+        <div class="mt-6 p-6 bg-gray-50 border border-gray-200 rounded-lg shadow-inner overflow-auto h-[70vh] resize-y">
+            <div id="content-display" class="prose max-w-none">
+                <!-- Fetched HTML content will be rendered here -->
+                <p class="text-gray-400 text-center italic">Content will appear here after a successful fetch.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Get references to all necessary HTML elements
+        const urlInput = document.getElementById('url-input');
+        const loadButton = document.getElementById('load-button');
+        const contentDisplay = document.getElementById('content-display');
+        const statusMessage = document.getElementById('status-message');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const downloadButton = document.getElementById('download-button');
+        const downloadContainer = document.getElementById('download-container');
+
+        // Add a click event listener to the load button
+        loadButton.addEventListener('click', async () => {
+            const url = urlInput.value.trim();
+
+            // Clear previous state
+            contentDisplay.innerHTML = '<p class="text-gray-400 text-center italic">Content will appear here after a successful fetch.</p>';
+            statusMessage.textContent = '';
+            downloadContainer.classList.add('hidden');
+
+            if (url === '') {
+                statusMessage.textContent = 'Please enter a URL.';
+                return;
+            }
+
+            // Show loading indicator
+            loadingIndicator.classList.remove('hidden');
+
+            try {
+                // Fetch the data from the provided URL
+                const response = await fetch(url);
+
+                // Check for a successful response (status code 200-299)
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                // Parse the JSON response
+                const data = await response.json();
+                
+                // Extract the required fields from the JSON payload
+                const notificationBody = data?.payload?.notificationBody;
+                const notificationId = data?.payload?.metaData?.notificationId;
+
+                // Check if the required data exists
+                if (!notificationBody) {
+                    throw new Error('Could not find "notificationBody" in the JSON response.');
+                }
+
+                // Render the HTML content
+                contentDisplay.innerHTML = notificationBody;
+
+                // Show the download button and set up its functionality
+                if (notificationId) {
+                    downloadContainer.classList.remove('hidden');
+                    downloadButton.onclick = () => {
+                        // Create a Blob from the HTML content
+                        const blob = new Blob([notificationBody], { type: 'text/html' });
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = `${notificationId}.html`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(a.href);
+                    };
+                }
+
+            } catch (error) {
+                console.error('Fetch error:', error);
+                // Display a user-friendly error message
+                statusMessage.textContent = `Error: ${error.message}. This could be a CORS issue.`;
+            } finally {
+                // Hide loading indicator after the request is complete
+                loadingIndicator.classList.add('hidden');
+            }
+        });
+
+        // Add a listener for the "Enter" key on the input field
+        urlInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                loadButton.click();
+            }
+        });
+        
+    </script>
+
+</body>
+</html>
